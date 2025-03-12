@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is my final project for the data science capstone by Jphn Hopkins which is focused on building a Next Word Prediction Application using Natural Language Processing (NLP) & deplyoing it in 
+This is my final project for the data science capstone by John Hopkins University which is focused on building a Next Word Prediction Application using Natural Language Processing (NLP) & deplyoing it in 
 the R shiny server.
 
 ## Objectives
