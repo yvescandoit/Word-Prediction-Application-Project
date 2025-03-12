@@ -1,0 +1,258 @@
+---
+title: "Milestone Report"
+author: "Raghav Pradhan"
+date: "2025-02-20"
+output: html_document
+---
+
+# Overview
+
+This is my Milestone report for my final data science project.
+
+The project is concerned with showing my progress in the NLP(*New Language Processing*) project,
+from downloading the data to summarizing,exploring the data and also my future plans for training my Predictive
+model with this data.
+
+## Loading the libraries
+
+```{r,warning=FALSE,message=FALSE}
+require(tm)
+require(ngram)
+require(ggplot2)
+require(stringi)
+require(stringr)
+require(dplyr)
+require(wordcloud)
+require(RColorBrewer)
+```
+
+## Downloading & loading the data
+
+```{r,warning=FALSE}
+
+trainURL <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+trainDataFile <- "data/Coursera-SwiftKey.zip"
+
+#reading the data
+con <- file("en_US.twitter.txt", "r") #making a connection with the file
+twt <- readLines(con)  #reading the lines
+close(con)  #closing the connection
+
+con_blo <- file("en_US.blogs.txt","r")
+blog <- readLines(con_blo)
+close(con_blo)
+
+con_new <- file("en_US.news.txt","r")
+news <- readLines(con_new)
+close(con_new) 
+```
+
+we see that there are 3 text files that we will be using for further analysis & model training, but let us first summarise these text files:
+
+- Twitter
+- Blogs
+- News
+
+```{r}
+
+size.file <- round(file.info(c("en_US.twitter.txt","en_US.news.txt","en_US.blogs.txt"))$size / 1024 ^ 2)  #size of files
+
+
+word_twt <- stri_count_words(twt) 
+word_blog <- stri_count_words(blog)  #data into words
+word_news <- stri_count_words(news)
+
+## now summarising the Dataset into a simple data Frame 
+
+data <- data.frame(source = c("Twitter","News","Blog"),
+                   size = paste(size.file,"MB"),
+                   no_of_lines = c(length(word_twt),length(word_news),length(word_blog)),
+                   no_of_words = c(sum(word_twt),sum(word_news),sum(word_blog)))
+data
+```
+
+We see that even though twitter has high number of lines the number of words is very much similar compared to its counterparts, that
+is probably because a tweet is only limited to certain words.
+
+The size of all these data are very large which can hinder our future analysis by long processing time & memory storage, 
+so we will be trimming the data for smooth processing.
+
+Now after summarizing the data let us proceed further.
+
+## Sampling the data
+
+Since the data is very big we will be sampling only a part of the data that will be used for further part of this project, we 
+will be using a sample size of *0.01%* of the dataset's length.
+
+```{r}
+set.seed(200)
+sample.data <- c(sample(twt,length(twt) * 0.01),sample(blog,length(blog) * 0.01),sample(news,length(news) * 0.01))
+```
+
+
+## Building a corpus
+
+Corpus is a collection of a structured text which is very much important in NLP for analysing and processing text data.
+
+I will be making a function that will turn the sampled text data into a corpus and also do all of these steps:
+
+- Remove URL, Twitter handles and email patterns by converting them to space
+- Convert all words to lowercase
+- Remove common English stop words
+- Remove punctuation marks
+- Remove numbers
+- Trim whitespace
+- get rid bad or profane words
+- Convert to plain text documents 
+
+Firstly we need to get the bad words or profane data set that I will be using in the function to detect and remove from the corpus.
+
+```{r}
+url = "https://github.com/dsojevic/profanity-list/blob/main/en.txt" #downloaded the profanity words from this git repo
+```
+
+Now let us make the **bcorpus** function.
+
+```{r,warning=FALSE}
+bcorpus <- function(dataset) {
+  data <- VCorpus(VectorSource(dataset))
+  space <- content_transformer(function(x,pattern) gsub(pattern," ",x))  #a nested func to get rid of any pattern by repalcing it with empty space
+  
+  #getting rid of those particular patterns with space func
+  
+  data <- tm_map(data,space ,"\\b[A-Z a-z 0-9._ - ]*[@](.*?)[.]{1,3} \\b")        #EMAIL pattern
+  data <- tm_map(data,space,"@[^\\s]+")                                           #twitter pattern
+  data <- tm_map(data,space ,"(f|ht)tp(s?)://(.*)[.][a-z]+")                      #Url pattern
+  
+  #now getting rid of all the bad words
+  
+  bad_words <- file("en.txt","r")
+  bad_words <- readLines(bad_words)
+  data <- tm_map(data,removeWords,bad_words)   
+  
+  #now getting rid of other things
+                                                     
+  data <- tm_map(data,tolower)                                    # transforming the data into lower case
+  data <- tm_map(data,removeNumbers)                              # removing the numbers
+  data <- tm_map(data,removePunctuation)                          # removing punctuation marks
+  data <- tm_map(data,stripWhitespace)                            # getting rid of extra white spaces                     
+  data <- tm_map(data,PlainTextDocument)
+  return(data)
+}
+```
+
+Now using the bcorpus fucntion and saving it into a dataframe.
+
+```{r}
+data <- bcorpus(sample.data)  ## now using this function to turn it into corpus
+saveRDS(data, file = "en_US.corpus.rds")  # saving the data in disk
+
+
+# turning it into a data frame & saving it into disk
+corpusText <- data.frame(text = unlist(sapply(data, '[', "content")), stringsAsFactors = FALSE) 
+con <- file("en_US.corpus.txt", open = "w")
+writeLines(corpusText$text, con)
+close(con)
+```
+
+
+## Exploratory Data analysis
+
+Now we will be performing Exploratory Data Analysis to get the gist of the data so that we can further plan our model
+training approach which is very important.
+
+```{r,warning=FALSE}
+tdm <- TermDocumentMatrix(data) #making it into a term document matrix which is a table with words and its frequency
+frequency <- sort(rowSums(as.matrix(removeSparseTerms(tdm,0.99))),decreasing = TRUE) #converting it into matrix and using rowSums to get the freq of each word in descending order
+word_freq <- data.frame(word = names(frequency),freq = frequency) #data frame with 2 cols, name and the frequency of the word
+
+## plot for the top 5 most frequent words
+ggplot(word_freq[1:5,], aes(x = reorder(word_freq[1:5,]$word, -word_freq[1:5,]$freq), y = word_freq[1:5,]$freq)) +
+  geom_bar(stat = "identity",fill = "#f68060") + ylab("Frequency")
+  
+
+## making a word cloud for the most appearing words
+wordcloud(words = word_freq$word, freq = word_freq$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+```
+
+we see that these 10 words are the most frequent words appearing in the corpus.
+
+**I wanted to get rid of the stop words but since our corpus data was too small it was hard for my model to predict 
+words for input that had alot of stopwords,because of that i have changed my approach**
+
+## N-grams & tokenizing
+
+Now for my predictive models I will be going with UNI,BI & TRI-Grams as these 3 will be enough for my model training.
+
+For the N-gram generation, I wanted to use the *RWefa* package but since one of its dependencies is *rjava* which is somehow not
+compatible with my system ,so I will be going with *tm* & *ngram* package which i have been using already.
+
+Firstly converting the corpus to a character vector as the ngram function only takes character string as input.
+
+```{r}
+text <- sapply(data, as.character) 
+```
+
+### Uni-Gram
+ 
+```{r}
+unigram_result <- ngram(paste(text, collapse = " "), n = 1)  # For generating unigrams from the data
+
+unigram_table <- get.phrasetable(unigram_result)  #getting a table of the unigrams along with the freq of the data
+
+unigram <- as.data.frame(unigram_table) #into a df for visualization
+
+ggplot(unigram[1:10,], aes(x = reorder(unigram[1:10,]$ngrams, - unigram[1:10,]$freq), y = unigram[1:10,]$freq)) + 
+  geom_bar(stat = "identity",fill = "blue")
+
+saveRDS(unigram,file = "unigram.rds")
+```
+
+### Bi-Gram
+
+```{r}
+bigram_result <- ngram(paste(text,collapse = " "), n = 2)
+
+bigram_table <- get.phrasetable(bigram_result)
+
+bigram <- as.data.frame(bigram_table)
+
+ggplot(bigram[1:10,], aes(x = reorder(bigram[1:10,]$ngrams, - bigram[1:10,]$freq), y = bigram[1:10,]$freq)) + 
+  geom_bar(stat = "identity",fill = "blue") +  theme(axis.text.x = element_text(hjust = 1.0, angle = 45),
+               axis.text.y = element_text(hjust = 0.5, vjust = 0.5))
+
+saveRDS(bigram,file = "bigram.rds")
+```
+
+### Tri-Gram
+
+```{r}
+trigram_result <- ngram(paste(text,collapse = " "),n = 3)
+
+trigram_table <- get.phrasetable(trigram_result)
+
+trigram <- as.data.frame(trigram_table)
+
+ggplot(trigram[1:10,], aes(x = reorder(trigram[1:10,]$ngrams, - trigram[1:10,]$freq), y = trigram[1:10,]$freq)) + 
+  geom_bar(stat = "identity",fill = "blue") + theme(axis.text.x = element_text(hjust = 1.0, angle = 45),
+               axis.text.y = element_text(hjust = 0.5, vjust = 0.5))
+
+saveRDS(trigram,file = "trigram.rds")
+```
+
+### Quad_gram
+
+```{r}
+quadgram_result <- ngram(paste(text,collapse = " "),n = 4)
+
+quadgram_table <- get.phrasetable(quadgram_result)
+
+quadgram <- as.data.frame(quadgram_table)
+
+ggplot(quadgram[1:10,], aes(x = reorder(quadgram[1:10,]$ngrams, - quadgram[1:10,]$freq), y = quadgram[1:10,]$freq)) + 
+  geom_bar(stat = "identity",fill = "blue") + theme(axis.text.x = element_text(hjust = 1.0, angle = 45),
+                                                    axis.text.y = element_text(hjust = 0.5, vjust = 0.5))
+
+saveRDS(quadgram,file = "quadgram.rds")
