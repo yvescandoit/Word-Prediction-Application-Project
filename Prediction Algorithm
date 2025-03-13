@@ -1,0 +1,133 @@
+
+# Prediction Algorithm Protoype (used improved ver in shiny application)
+
+
+
+#this function checks the length of the input by grams and assigns it to a predicting data
+#(ex if the input is a trigram it will assign a pred_df of quadgram to predict the 4th word)
+
+df_ngram <- function(text) {
+  
+  userInput <- unlist(strsplit(text," "))      #to split the text into individual strings
+  userInput_length <- length(userInput)    #then checking the length
+  
+  
+  if(userInput_length >= 3) {                      #if only the input text has 3 or more than 3 words
+    
+    grams <- paste(userInput[userInput_length-2],  #putting the trigrams in a variable
+                   userInput[userInput_length-1],
+                   userInput[userInput_length])
+    
+    pred_df <- quadgram                            #will be using the quadragram to determine & predict the next word after 3 word input
+    
+  }  else if (userInput_length == 2) {                    #if only the input text is 2 words
+    
+    grams <- paste(userInput[userInput_length-1],  #putting the Bigrams in a variable
+                   userInput[userInput_length])
+    
+    pred_df <- trigram                             #will be using the trigams df to determine & predict the next word after 2 word input 
+    
+  } else {                                         #if the input text is 1 word
+    
+    grams <- paste(userInput[userInput_length])    #putting the unigram in a variable
+    
+    pred_df <- bigram                              #will be using the bigram df to determine the next word after the word
+  }
+  assign("grams",grams,envir = .GlobalEnv)
+  assign("pred_df",pred_df,envir = .GlobalEnv) 
+  
+}
+
+#this function checks if there are any matches in the pred_df with the input ngram
+#if matches == 0 then it will reduce the ngram by getting rid of the starting word
+#also changes the pred_df to -1 (ie tri to bigram)
+#keeps on repeating until a match is found
+#if no match in all 3 pred_df then it will switch to unigram 
+
+backoff <- function(input_ngram) {
+  
+  matched_ngram <- sum(pred_df$ngrams == grams) #checking if there are any matches in the pred_df with the input
+  
+  #if there are no word matches in that specific ngram then we try to reduce the ngrams by so that we eventually get a match
+  
+  if(matched_ngram == 0) {               #if there are no matches(ie matched_ngram == 0)
+    
+    if(length(pred_df$ngrams) == length(bigram$ngrams))  { #if the target df is bigram we cant make any more change in the input grams
+      
+      grams <- input_ngram          
+      pred_df <- unigram  #but we change its pred_df to unigram so it can atleast go with word that is used alot in uni df
+      
+      matched_ngram <- 0 
+      
+    } else { 
+      
+      if(length(pred_df$ngrams) == length(trigram$ngrams))  {  #if the target df is trigram(i.e 2 worded input) we make changes by reducing the ngram
+        
+        grams <- word(input_ngram,-1)                        #this only gets the last word of the gram,so changing it from a 2 to 1 word input
+        pred_df <- bigram                             #changing the prediction df to bigram from trigram
+        
+        matched_ngram <- sum(pred_df$ngrams == grams)
+        
+      } else {                                          #the last condition is that the input is 3 worded(the pred_df will be quadgram)
+        
+        grams <- word(input_ngram,-2,-1)              #this only gets the last 2 words of the input instead of 3 worded input
+        pred_df <- trigram                              #changing the prediction df to trigram from quadgram
+        
+        
+        matched_ngram <- sum(pred_df$ngrams == grams)   #now checking again to see if are there any matches or not
+        
+        if(matched_ngram == 0) {                      #if still no then it will reduce the input even more
+          
+          grams <- word(input_ngram,-1)               #gets only the last word of the input
+          pred_df <- bigram                       #updating the prediction df
+          
+          matched_ngram <- sum(pred_df$ngrams == grams)   
+          
+        }
+        
+        
+      }
+      
+      
+    }  
+    
+  }
+  
+  assign("matched_ngram",matched_ngram,envir = .GlobalEnv)
+  assign("pred_df",pred_df,envir = .GlobalEnv)
+  assign("grams",grams,envir = .GlobalEnv)
+  
+}  
+
+
+# This func takes 2 inputs (pred_df,grams)
+# checks if the length of the pred_df is unigram (for inputs with no matches)
+# if yes then will give the words with most freq in unigram
+# else will look for the words with matches in the pred_df and print the 3 with most freq
+
+
+
+predicted_word <- function(pred_df,grams) {
+  
+  if (length(pred_df$ngrams) == length(unigram$ngrams)) {     #for the input that didnt match with bigram so had to be changed to unigram
+    
+    prediction <- unigram %>%     #then going with the words that have most freq 
+      top_n(n=3,wt = prop) %>%    #in the unigram df
+      slice(1:3)
+    
+    prediction_df <- as.data.frame(prediction)
+    
+  }  else {                    #if the input did have a macth
+    
+    prediction <- pred_df %>%     #gets the macthed rows with the highest freq in that specific df
+      filter(grepl(paste0("^", grams, "\\b"),ngrams)) %>%
+      top_n(n = 3,wt = prop) %>%
+      slice(1:3)
+    
+    prediction_df <- as.data.frame(prediction)
+  }
+  
+  assign("prediction_df",prediction_df,envir = .GlobalEnv)
+  
+}  
+
