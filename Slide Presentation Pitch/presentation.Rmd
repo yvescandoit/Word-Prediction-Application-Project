@@ -1,0 +1,52 @@
+---
+title: "Word Prediction Model using Natural Language Processing"
+author: "Raghav Pradhan"
+date: "2025-03-10"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## About this project
+
+This is my final project using NLP for Data science capstone where I have made a data product that predicts the next word of the input string.
+
+Overview of how I created the data product
+
+- Cleaning & exploration of data from twitter,blogs & news
+- Tokenization & creation of n-grams data (uni,bi,tri,quad-gram)
+- Came up with a prediction model that predicts the next word of a given string
+- Wrote a shiny application that uses the model to predict and deployed it into shiny server
+
+
+## Prediction Model piepline
+
+- After receiving the text input, it first cleans the text(to lowercase etc)
+- Then it counts the words of input & assigns the input to it's respective n-gram and a prediction data
+- Used a backoff model for inputs that didnt have a match so, it can get a match in a lower gram (N-1)
+- Finally if no match found it will just print the words with most frequency in unigram(single word)
+- otherwise it will print the top 3 matches with most frequency
+
+## How to use 
+
+The Application is very much easy to use & is accessible by anyone.
+
+Firstly, put your text input (string of words) into the text box given on the left side and click on 
+the predict button
+
+kindly wait for the model to generate the output as it might take some time (usually 4-7 secs).
+
+& voila!! you will have the **predicted word generated** right below the action button along with a **boxplot**
+showcasing top 3 words matched with highest frequency.
+
+## Links 
+
+The application is deployed out here: 
+
+[shiny application](https://yvescandoit.shinyapps.io/Word_Prediction_app/)
+
+The codes for the project is available out here:
+
+[Github](https://github.com/yvescandoit/Word-Prediction-Application-Project)
